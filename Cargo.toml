@@ -1,0 +1,24 @@
+[package]
+name = "socks"
+description = "SOCKS proxy server library"
+keywords = ["socks", "proxy", "server", "std", "async", "tokio"]
+authors = ["Henry Barreto <contato@henrybarreto.dev>"]
+repository = "https://github.com/henrybarreto/socks"
+license = "MIT"
+license-file = "LICENSE"
+readme = "README.md"
+version = "0.0.0"
+edition = "2021"
+
+[features]
+tokio = ["dep:tokio"]
+full = ["tokio"]
+default = ["full"]
+
+[dependencies]
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "net",
+  "io-util",
+  "macros",
+], optional = true }
