@@ -40,6 +40,8 @@ fn main() {
     for tcp_stream in listener.incoming() {
         match tcp_stream {
             Ok(mut stream) => {
+                println!("New TCP stream accepted");
+
                 thread::spawn(move || {
                     println!("new tcp stream");
 
@@ -48,27 +50,35 @@ fn main() {
                     let request: Request = match SocksStream::read(&mut stream, &mut buffer) {
                         Ok(request) => request,
                         Err(e) => {
-                            dbg!(e);
+                            eprintln!("Error reading SOCKS4 request: {:?}", e);
 
                             return;
                         }
                     };
 
-                    dbg!(&request);
+                    println!("Received SOCKS4 request: {:?}", request);
 
                     let ip = request.get_ip();
                     let port = request.get_port();
-
-                    dbg!(ip);
-                    dbg!(port);
-
                     let addr: SocketAddr = SocketAddr::new(ip, port);
-                    let mut connection = TcpStream::connect(addr).unwrap();
+
+                    println!("Connecting to {}:{}", ip, port);
+
+                    let mut connection = match TcpStream::connect(addr) {
+                        Ok(connection) => connection,
+                        Err(e) => {
+                            eprintln!("Failed to connect to destination: {:?}", e);
+
+                            return;
+                        }
+                    };
 
                     let response = Response::new(Reply::Granted);
-                    dbg!(&response);
+                    if let Err(e) = SocksStream::write(&mut stream, response) {
+                        eprintln!("Error sending response: {:?}", e);
 
-                    SocksStream::write(&mut stream, response).unwrap();
+                        return;
+                    }
 
                     let mut s = stream.try_clone().unwrap();
                     let mut c = connection.try_clone().unwrap();
@@ -80,8 +90,12 @@ fn main() {
                                 Ok(0) => {
                                     break;
                                 }
-                                Ok(read) => {
-                                    s.write_all(&buffer[..read]).unwrap();
+                                Ok(size) => {
+                                    if let Err(e) = s.write_all(&buffer[..size]) {
+                                        eprintln!("Error writing to stream: {:?}", e);
+
+                                        break;
+                                    }
                                 }
                                 Err(e) => {
                                     dbg!(e);
@@ -98,8 +112,12 @@ fn main() {
                             Ok(0) => {
                                 break;
                             }
-                            Ok(read) => {
-                                connection.write_all(&buffer[..read]).unwrap();
+                            Ok(size) => {
+                                if let Err(e) = connection.write_all(&buffer[..size]) {
+                                    eprintln!("Error writing to connection: {:?}", e);
+
+                                    break;
+                                }
                             }
                             Err(e) => {
                                 dbg!(e);
@@ -109,7 +127,7 @@ fn main() {
                         }
                     }
 
-                    println!("tcp stream done")
+                    println!("SOCKS4 connection closed");
                 });
             }
             Err(e) => {
