@@ -16,10 +16,18 @@
 //! - Async support.
 use std::io::{Error, ErrorKind};
 
-use crate::{request, response, Read, ReadTokio, Write, WriteTokio};
+use crate::{request, response, Read, Write};
 
 use request::Request;
 use response::Response;
+
+#[cfg(feature = "async")]
+use crate::{ReadAsync, WriteAsync};
+
+#[cfg(all(feature = "async", feature = "smol"))]
+use smol::io::{AsyncReadExt as SmolAsyncReadExt, AsyncWriteExt as SmolAsyncWriteExt};
+
+#[cfg(all(feature = "async", feature = "tokio"))]
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug)]
@@ -31,34 +39,6 @@ impl Read for SocksStream {
         buffer: &mut [u8],
     ) -> Result<Request, Error> {
         let read = stream.read(buffer);
-        if let Err(e) = read {
-            return Err(e);
-        }
-
-        let size = read.unwrap();
-
-        if size == 0 {
-            return Err(Error::new(ErrorKind::Other, "stream was closed"));
-        }
-
-        if size < request::SOCKS4_REQUEST_MIN_SIZE {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "SOCKS inital request should have at least 8 bytes",
-            ));
-        }
-
-        return Ok(Request::from(buffer[..size].to_vec()));
-    }
-}
-
-#[cfg(feature = "tokio")]
-impl ReadTokio for SocksStream {
-    async fn read_async(
-        stream: &mut tokio::net::TcpStream,
-        buffer: &mut [u8],
-    ) -> Result<Request, Error> {
-        let read = stream.read(buffer).await;
         if let Err(e) = read {
             return Err(e);
         }
@@ -104,10 +84,91 @@ impl Write for SocksStream {
     }
 }
 
-#[cfg(feature = "tokio")]
-impl WriteTokio for SocksStream {
+#[cfg(all(feature = "async", feature = "tokio"))]
+impl ReadAsync<tokio::net::TcpStream> for SocksStream {
+    async fn read_async(
+        stream: &mut tokio::net::TcpStream,
+        buffer: &mut [u8],
+    ) -> Result<Request, Error> {
+        let read = stream.read(buffer).await;
+        if let Err(e) = read {
+            return Err(e);
+        }
+
+        let size = read.unwrap();
+
+        if size == 0 {
+            return Err(Error::new(ErrorKind::Other, "stream was closed"));
+        }
+
+        if size < request::SOCKS4_REQUEST_MIN_SIZE {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "SOCKS inital request should have at least 8 bytes",
+            ));
+        }
+
+        return Ok(Request::from(buffer[..size].to_vec()));
+    }
+}
+
+#[cfg(all(feature = "async", feature = "smol"))]
+impl ReadAsync<smol::net::TcpStream> for SocksStream {
+    async fn read_async(
+        stream: &mut smol::net::TcpStream,
+        buffer: &mut [u8],
+    ) -> Result<Request, Error> {
+        let read = stream.read(buffer).await;
+        if let Err(e) = read {
+            return Err(e);
+        }
+
+        let size = read.unwrap();
+
+        if size == 0 {
+            return Err(Error::new(ErrorKind::Other, "stream was closed"));
+        }
+
+        if size < request::SOCKS4_REQUEST_MIN_SIZE {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "SOCKS inital request should have at least 8 bytes",
+            ));
+        }
+
+        return Ok(Request::from(buffer[..size].to_vec()));
+    }
+}
+
+#[cfg(all(feature = "async", feature = "tokio"))]
+impl WriteAsync<tokio::net::TcpStream> for SocksStream {
     async fn write_async(
         stream: &mut tokio::net::TcpStream,
+        response: Response,
+    ) -> Result<(), Error> {
+        let response_buffer: Vec<u8> = response.into();
+
+        let wrote = stream.write(&response_buffer).await;
+        if let Err(e) = wrote {
+            return Err(e);
+        }
+
+        let size = wrote.unwrap();
+        if size != response::SOCKS4_RESPONSE_SIZE {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "SOCKS wrtie should write 8 bytes, but failed on it",
+            ));
+        }
+
+        return Ok(());
+    }
+}
+
+#[cfg(all(feature = "async", feature = "smol"))]
+impl WriteAsync<smol::net::TcpStream> for SocksStream {
+    async fn write_async(
+        stream: &mut smol::net::TcpStream,
         response: Response,
     ) -> Result<(), Error> {
         let response_buffer: Vec<u8> = response.into();

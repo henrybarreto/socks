@@ -71,8 +71,10 @@ fn main() {
 
 use std::io::Error;
 
+pub mod client;
 pub mod request;
 pub mod response;
+pub mod server;
 pub mod v4;
 
 use request::Request;
@@ -86,11 +88,11 @@ pub trait Read {
     ) -> Result<Request, Error>;
 }
 
-#[cfg(feature = "tokio")]
-pub trait ReadTokio {
-    /// Reads a SOCKS request from a tokion stream.
+#[cfg(feature = "async")]
+pub trait ReadAsync<T> {
+    /// Reads a SOCKS request from a async stream.
     fn read_async(
-        stream: &mut tokio::net::TcpStream,
+        stream: &mut T,
         buffer: &mut [u8],
     ) -> impl std::future::Future<Output = Result<Request, Error>> + Send;
 }
@@ -100,11 +102,11 @@ pub trait Write {
     fn write(stream: impl std::io::Read + std::io::Write, response: Response) -> Result<(), Error>;
 }
 
-#[cfg(feature = "tokio")]
-pub trait WriteTokio {
-    /// Writes a SOCKS response to a tokio stream;
+#[cfg(feature = "async")]
+pub trait WriteAsync<T> {
+    /// Writes a SOCKS response to a async stream.
     fn write_async(
-        stream: &mut tokio::net::TcpStream,
+        stream: &mut T,
         response: Response,
     ) -> impl std::future::Future<Output = Result<(), Error>> + Send;
 }

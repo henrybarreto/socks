@@ -3,6 +3,12 @@ This is a simple SOCKS4 server example using Tokio.
 
 # Usage
 
+To run the test, we can use the command below.
+
+```bash
+cargo run --example socks4_tokio --features tokio
+```
+
 ## HTTPie
 
 You can use HTTPie with `--proxy` flag to do an HTTP request through the SOCKS server.
@@ -19,10 +25,11 @@ You can also test the server through a Chromium based browser.
 chromium --proxy-server="socks4://localhost:1080"
 ```
 */
+
 use socks::{
     response::{Reply, Response},
     v4::SocksStream,
-    ReadTokio, WriteTokio,
+    ReadAsync, WriteAsync,
 };
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -45,6 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(request) => request,
                 Err(e) => {
                     eprintln!("Error reading SOCKS4 request: {:?}", e);
+
                     return;
                 }
             };
