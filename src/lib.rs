@@ -8,103 +8,74 @@ structures for building and managing SOCKS proxy servers. The idea is to allow
 developers to easily create, configure, and deploy SOCKS proxies for secure,
 anonymous internet communication.
 
-# Example
-
-```rust
-use std::net::{SocketAddr, TcpListener, TcpStream};
-
-use socks::{
-    request::Request,
-    response::{Reply, Response},
-    v4::SocksStream,
-    Read as SocksRead, Write as SocksWrite,
-};
-
-fn main() {
-    let listener = TcpListener::bind("127.0.0.1:1080").unwrap();
-    for tcp_stream in listener.incoming() {
-        match tcp_stream {
-            Ok(mut stream) => {
-                let mut buffer: Vec<u8> = vec![0 as u8; 65535];
-
-                let request: Request = match SocksStream::read(&mut stream, &mut buffer) {
-                    Ok(request) => request,
-                    Err(e) => {
-                        dbg!(e);
-
-                        return;
-                    }
-                };
-
-                dbg!(&request);
-
-                let ip = request.get_ip();
-                let port = request.get_port();
-
-                dbg!(ip);
-                dbg!(port);
-
-                let addr: SocketAddr = SocketAddr::new(ip, port);
-                let mut connection = TcpStream::connect(addr).unwrap();
-
-                let response = Response::new(Reply::Granted);
-                dbg!(&response);
-
-                SocksStream::write(&mut stream, response).unwrap();
-
-                // Pipe data between the socket and connection.
-            }
-            Err(e) => {
-                dbg!(e);
-
-                return;
-            }
-        }
-    }
-}
-```
-
 ## References
 - [RFC 1928 - SOCKS Protocol Specification](https://datatracker.ietf.org/doc/html/rfc1928)
 - [Wikipedia - SOCKS](https://en.wikipedia.org/wiki/SOCKS)
 */
 
-use std::io::Error;
-
-pub mod request;
-pub mod response;
+pub mod common;
 pub mod v4;
+pub mod v5;
 
-use request::Request;
-use response::Response;
+/// Versions.
+///
+/// # Example
+///
+/// ```rust
+/// use socks::Version;
+///
+/// let version: u8 = Version::V4 as u8;
+/// ```
+#[derive(Debug, Clone)]
+pub enum Version {
+    Invalid = 0x00,
+    V4 = 0x04,
+    /**
+    The SOCKS5 protocol is defined in RFC 1928. It is an incompatible extension of the SOCKS4
+    protocol; it offers more choices for authentication and adds support for IPv6 and UDP, the
+    latter of which can be used for DNS lookups.
 
-pub trait Read {
-    /// Reads a SOCKS request from a stream.
-    fn read(
-        stream: impl std::io::Read + std::io::Write,
-        buffer: &mut [u8],
-    ) -> Result<Request, Error>;
+    <https://datatracker.ietf.org/doc/html/rfc1928>
+    */
+    V5 = 0x05,
 }
 
-#[cfg(feature = "tokio")]
-pub trait ReadTokio {
-    /// Reads a SOCKS request from a tokion stream.
-    fn read_async(
-        stream: &mut tokio::net::TcpStream,
-        buffer: &mut [u8],
-    ) -> impl std::future::Future<Output = Result<Request, Error>> + Send;
+impl From<u8> for Version {
+    fn from(value: u8) -> Self {
+        match value {
+            4 => Self::V4,
+            5 => Self::V5,
+            _ => Self::Invalid,
+        }
+    }
 }
 
-pub trait Write {
-    /// Writes a SOCKS response to a stream.
-    fn write(stream: impl std::io::Read + std::io::Write, response: Response) -> Result<(), Error>;
+/// Command code.
+///
+/// # Example
+///
+/// ```rust
+/// use socks::Command;
+///
+/// let command: u8 = Command::Connect as u8;
+/// ```
+#[derive(Debug, Clone)]
+pub enum Command {
+    Invalid = 0x00,
+    /// Establish a TCP stream connection.
+    Connect = 0x01,
+    /// Establish a TCP port binding.
+    Bind = 0x02,
+    Associate = 0x03,
 }
 
-#[cfg(feature = "tokio")]
-pub trait WriteTokio {
-    /// Writes a SOCKS response to a tokio stream;
-    fn write_async(
-        stream: &mut tokio::net::TcpStream,
-        response: Response,
-    ) -> impl std::future::Future<Output = Result<(), Error>> + Send;
+impl From<u8> for Command {
+    fn from(value: u8) -> Self {
+        return match value {
+            0x01 => Command::Connect,
+            0x02 => Command::Bind,
+            0x03 => Command::Associate,
+            _ => Self::Invalid,
+        };
+    }
 }

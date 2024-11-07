@@ -23,11 +23,21 @@ use the library effectively in different scenarios.
 
 ## Support
 
-SOCKS supports these versions of the protocol.
+SOCKS supports these features.
 
 - [X] SOCKS4
-- [ ] SOCKS4a
-- [ ] SOCKS5
+  - [x] TCP connection
+  - [ ] TCP bind
+- [x] SOCKS5
+  - [ ] IPv4
+    - [x] TCP connection
+    - [ ] TCP bind
+  - [ ] IPv6
+    - [x] TCP connection
+    - [ ] TCP bind
+  - [ ] Domain
+    - [x] TCP connection
+    - [ ] TCP bind
 
 ## License
 
