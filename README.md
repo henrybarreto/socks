@@ -26,11 +26,18 @@ use the library effectively in different scenarios.
 SOCKS supports these features.
 
 - [X] SOCKS4
-  - [ ] 4a
+  - [x] TCP connection
+  - [ ] TCP bind
 - [x] SOCKS5
-  - [X] IPv4
-  - [X] IPv6
+  - [ ] IPv4
+    - [x] TCP connection
+    - [ ] TCP bind
+  - [ ] IPv6
+    - [ ] TCP connection
+    - [ ] TCP bind
   - [ ] Domain
+    - [ ] TCP connection
+    - [ ] TCP bind
 
 ## License
 

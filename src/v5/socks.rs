@@ -61,6 +61,7 @@ impl Socks {
                         }
 
                         let request = Request::from(&buffer[..size]);
+                        dbg!(&request);
 
                         println!("Received SOCKS5 request: {:?}", request);
 
