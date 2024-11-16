@@ -4,9 +4,7 @@ use std::net::IpAddr;
 
 use crate::{Command, Version};
 
-/// SOCKS request packet.
-///
-/// This structure represents a Request packet read from TCP stream;
+/// SOCKS4 request packet.
 #[derive(Debug, Clone)]
 pub struct Request {
     /// Version number.
@@ -39,8 +37,8 @@ impl Request {
     }
 }
 
-impl From<Vec<u8>> for Request {
-    fn from(buffer: Vec<u8>) -> Self {
+impl From<&[u8]> for Request {
+    fn from(buffer: &[u8]) -> Self {
         return Request {
             version: buffer[0],
             command: buffer[1],

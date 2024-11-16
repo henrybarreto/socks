@@ -9,18 +9,3 @@ license-file = "LICENSE"
 readme = "README.md"
 version = "0.0.0"
 edition = "2021"
-
-[features]
-async = []
-tokio = ["async", "dep:tokio"]
-smol = ["async", "dep:smol"]
-default = ["async", "tokio"]
-
-[dependencies]
-tokio = { version = "1", features = [
-  "rt-multi-thread",
-  "net",
-  "io-util",
-  "macros",
-], optional = true }
-smol = { version = "2", optional = true }

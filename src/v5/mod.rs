@@ -1,30 +1,24 @@
+//! SOCKS v5 module.
+//!
+//! The `v5` module provides functionality for implementing the SOCKS5 protocol,
+//! allowing clients to establish connections through a SOCKS5 proxy server.
+//!
+//! ## Overview
+//!
+//! It is an incompatible extension of the SOCKS4 protocol; it offers more choices for
+//! authentication and adds support for IPv6 and UDP, the latter of which can be used for DNS
+//! lookups.
+
 pub mod client;
 pub mod server;
-
-/// Command code.
-///
-/// # Example
-///
-/// ```rust
-/// let command: u8 = Commands::Connect as u8;
-/// ```
-#[derive(Debug, Clone)]
-pub enum Commands {
-    Invalid = 0x00,
-    /// Establish a TCP stream connection.
-    Connect = 0x01,
-    /// Establish a TCP port binding.
-    Bind = 0x02,
-    /// Establish a UDP port.
-    Associate = 0x03,
-}
+pub mod socks;
 
 /// Reply code.
 ///
 /// # Example
 ///
 /// ```rust
-/// let reply: u8 = Reply::Granted as u8;
+/// let reply: u8 = Reply::RequestGranted as u8;
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum Reply {
@@ -39,7 +33,6 @@ pub enum Reply {
     AddressTypeNotSupported = 0x08,
 }
 
-// Implementing `From<u8>` for converting from a raw byte (u8) to the enum variant
 impl From<u8> for Reply {
     fn from(byte: u8) -> Self {
         match byte {
@@ -57,7 +50,6 @@ impl From<u8> for Reply {
     }
 }
 
-// Implementing `Into<u8>` for converting the enum variant to a raw byte (u8)
 impl Into<u8> for Reply {
     fn into(self) -> u8 {
         self as u8

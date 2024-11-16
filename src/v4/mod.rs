@@ -8,47 +8,32 @@
 //! SOCKS4 is a networking protocol that facilitates communication between a client
 //! and a server through a proxy. It is primarily used for TCP connections and is
 //! known for its simplicity and ease of use.
-//!
-//! ## Features
-//!
-//! - Functions, methods, and structures to handle SOCKS4 requests.
-//! - Usage of fundamental traits for IO as std::io::Read and std::io::Write.
-//! - Async support.
-use std::io::Error;
-
-use client::Request;
-use server::Response;
 
 pub mod client;
 pub mod server;
+pub mod socks;
 
-pub trait Read {
-    /// Reads a SOCKS request from a stream.
-    fn read(
-        stream: impl std::io::Read + std::io::Write,
-        buffer: &mut [u8],
-    ) -> Result<Request, Error>;
+/// Reply code.
+///
+/// # Example
+///
+/// ```rust
+/// let reply: u8 = Reply::Granted as u8;
+/// ```
+#[derive(Debug, Clone)]
+pub enum Reply {
+    /// Request granted.
+    Granted = 0x5A,
+    /// Request rejected or failed.
+    RejectOrFailed = 0x5B,
+    /// Request failed because client is not running identd (or not reachable from server).
+    FailedClientNotRunning = 0x5C,
+    /// Request failed because client's identd could not confirm the user ID in the request.
+    FailedClientNotConfirmed = 0x5D,
 }
 
-#[cfg(feature = "async")]
-pub trait ReadAsync<T> {
-    /// Reads a SOCKS request from a async stream.
-    fn read_async(
-        stream: &mut T,
-        buffer: &mut [u8],
-    ) -> impl std::future::Future<Output = Result<Request, Error>> + Send;
-}
-
-pub trait Write {
-    /// Writes a SOCKS response to a stream.
-    fn write(stream: impl std::io::Read + std::io::Write, response: Response) -> Result<(), Error>;
-}
-
-#[cfg(feature = "async")]
-pub trait WriteAsync<T> {
-    /// Writes a SOCKS response to a async stream.
-    fn write_async(
-        stream: &mut T,
-        response: Response,
-    ) -> impl std::future::Future<Output = Result<(), Error>> + Send;
+impl Into<u8> for Reply {
+    fn into(self) -> u8 {
+        return self as u8;
+    }
 }
