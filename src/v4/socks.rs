@@ -4,7 +4,10 @@ use std::{
     thread,
 };
 
-use crate::v4::{client::Request, server::Response};
+use crate::{
+    v4::{client::Request, server::Response},
+    Command, Version,
+};
 
 use super::Reply;
 
@@ -53,83 +56,92 @@ impl Socks {
                         let port = request.get_port();
                         let addr: SocketAddr = SocketAddr::new(ip, port);
 
-                        let reply = handler(addr);
-                        let response = Response::new(reply.clone());
-                        let response_buffer: Vec<u8> = response.into();
+                        match Command::from(request.command) {
+                            Command::Connect => {
+                                println!("Connecting to {}:{}", ip, port);
 
-                        let wrote = stream.write(&response_buffer);
-                        if let Err(e) = wrote {
-                            dbg!(e);
+                                let mut connection = match TcpStream::connect(addr) {
+                                    Ok(connection) => connection,
+                                    Err(e) => {
+                                        eprintln!("Failed to connect to destination: {:?}", e);
 
-                            return;
-                        }
-
-                        let size = wrote.unwrap();
-                        dbg!(size);
-
-                        if let Reply::Granted = reply {
-                            println!("Access allowed");
-                        } else {
-                            eprintln!("Access not allowed");
-
-                            return;
-                        }
-
-                        println!("Connecting to {}:{}", ip, port);
-
-                        let mut connection = match TcpStream::connect(addr) {
-                            Ok(connection) => connection,
-                            Err(e) => {
-                                eprintln!("Failed to connect to destination: {:?}", e);
-
-                                return;
-                            }
-                        };
-
-                        let mut s = stream.try_clone().unwrap();
-                        let mut c = connection.try_clone().unwrap();
-                        let _ = thread::spawn(move || {
-                            let mut buffer: Vec<u8> = vec![0 as u8; 65535];
-
-                            loop {
-                                match c.read(&mut buffer) {
-                                    Ok(0) => {
-                                        break;
+                                        return;
                                     }
-                                    Ok(size) => {
-                                        if let Err(e) = s.write_all(&buffer[..size]) {
-                                            eprintln!("Error writing to stream: {:?}", e);
+                                };
+
+                                let reply = handler(addr);
+                                let response = Response::new(reply.clone());
+                                let response_buffer: Vec<u8> = response.into();
+
+                                let wrote = stream.write(&response_buffer);
+                                if let Err(e) = wrote {
+                                    dbg!(e);
+
+                                    return;
+                                }
+
+                                let size = wrote.unwrap();
+                                dbg!(size);
+
+                                if let Reply::Granted = reply {
+                                    println!("Access allowed");
+                                } else {
+                                    eprintln!("Access not allowed");
+
+                                    return;
+                                }
+
+                                let mut s = stream.try_clone().unwrap();
+                                let mut c = connection.try_clone().unwrap();
+                                let _ = thread::spawn(move || {
+                                    let mut buffer: Vec<u8> = vec![0 as u8; 65535];
+
+                                    loop {
+                                        match c.read(&mut buffer) {
+                                            Ok(0) => {
+                                                break;
+                                            }
+                                            Ok(size) => {
+                                                if let Err(e) = s.write_all(&buffer[..size]) {
+                                                    eprintln!("Error writing to stream: {:?}", e);
+
+                                                    break;
+                                                }
+                                            }
+                                            Err(e) => {
+                                                dbg!(e);
+
+                                                break;
+                                            }
+                                        }
+                                    }
+                                });
+
+                                let mut buffer: Vec<u8> = vec![0 as u8; 65535];
+                                loop {
+                                    match stream.read(&mut buffer) {
+                                        Ok(0) => {
+                                            break;
+                                        }
+                                        Ok(size) => {
+                                            if let Err(e) = connection.write_all(&buffer[..size]) {
+                                                eprintln!("Error writing to connection: {:?}", e);
+
+                                                break;
+                                            }
+                                        }
+                                        Err(e) => {
+                                            dbg!(e);
 
                                             break;
                                         }
                                     }
-                                    Err(e) => {
-                                        dbg!(e);
-
-                                        break;
-                                    }
                                 }
                             }
-                        });
+                            _ => {
+                                eprintln!("SOCKS doesn't support this command yet");
 
-                        let mut buffer: Vec<u8> = vec![0 as u8; 65535];
-                        loop {
-                            match stream.read(&mut buffer) {
-                                Ok(0) => {
-                                    break;
-                                }
-                                Ok(size) => {
-                                    if let Err(e) = connection.write_all(&buffer[..size]) {
-                                        eprintln!("Error writing to connection: {:?}", e);
-
-                                        break;
-                                    }
-                                }
-                                Err(e) => {
-                                    dbg!(e);
-
-                                    break;
-                                }
+                                return;
                             }
                         }
 
