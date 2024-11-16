@@ -15,7 +15,8 @@ http --proxy=http:socks4://localhost:1080 http://example.com
 use ::socks::v4::Reply;
 use socks::v4::socks;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("example of a simple SOCKS4 server");
 
     let server = socks::Socks::new();
@@ -24,5 +25,6 @@ fn main() {
         .listen("127.0.0.1:1080", |_| {
             return Reply::Granted;
         })
+        .await
         .unwrap();
 }

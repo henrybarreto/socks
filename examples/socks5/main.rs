@@ -18,7 +18,8 @@ use ::socks::{
 };
 use socks::v5::socks;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("example of a simple SOCKS5 server");
 
     let server = socks::Socks::new();
@@ -36,5 +37,6 @@ fn main() {
                 return Reply::RequestGranted;
             },
         )
+        .await
         .unwrap();
 }

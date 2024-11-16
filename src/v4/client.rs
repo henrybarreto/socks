@@ -14,7 +14,7 @@ pub struct Request {
     /// Destination port number (in network byte order).
     pub port: [u8; 2],
     /// Destination IPv4 Address, 4 bytes (in network byte order).
-    pub ip: [u8; 4],
+    pub addr: [u8; 4],
     /// The user ID string, variable length, null-terminated.
     pub id: Vec<u8>,
 }
@@ -32,8 +32,8 @@ impl Request {
         return u16::from_be_bytes(self.port);
     }
 
-    pub fn get_ip(&self) -> IpAddr {
-        return IpAddr::from(self.ip);
+    pub fn get_addr(&self) -> IpAddr {
+        return IpAddr::from(self.addr);
     }
 }
 
@@ -43,7 +43,7 @@ impl From<&[u8]> for Request {
             version: buffer[0],
             command: buffer[1],
             port: [buffer[2], buffer[3]],
-            ip: [buffer[4], buffer[5], buffer[6], buffer[7]],
+            addr: [buffer[4], buffer[5], buffer[6], buffer[7]],
             id: Vec::from(&buffer[7..]),
         };
     }

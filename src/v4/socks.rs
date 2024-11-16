@@ -1,159 +1,148 @@
-use std::{
-    io::{Error, Read, Write},
-    net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs},
-    thread,
+use std::{io::Error, net::SocketAddr};
+
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream, ToSocketAddrs},
 };
 
 use crate::{
     v4::{client::Request, server::Response},
-    Command, Version,
+    Command,
 };
 
 use super::Reply;
 
-pub struct Socks {}
+pub struct Socks;
 
 impl Socks {
     pub fn new() -> Self {
-        return Socks {};
+        return Socks;
     }
 
-    pub fn listen(
+    pub async fn listen(
         &self,
         addr: impl ToSocketAddrs,
         handler: fn(addr: SocketAddr) -> Reply,
     ) -> Result<(), Error> {
-        // NOTE: Implementation for tests only.
-        let listener = TcpListener::bind(addr).unwrap();
-        for tcp_stream in listener.incoming() {
-            match tcp_stream {
-                Ok(mut stream) => {
-                    println!("New TCP stream accepted");
+        let listener = TcpListener::bind(addr).await?;
 
-                    thread::spawn(move || {
-                        println!("new tcp stream");
+        loop {
+            let (mut stream, _) = listener.accept().await?;
+            println!("New TCP stream accepted");
 
-                        let mut buffer: Vec<u8> = vec![0 as u8; 65535];
+            tokio::spawn(async move {
+                println!("new tcp stream");
 
-                        let read = stream.read(&mut buffer);
-                        if let Err(e) = read {
-                            dbg!(e);
+                let mut buffer: Vec<u8> = vec![0 as u8; 65535];
 
-                            return;
-                        }
+                let read = stream.read(&mut buffer).await;
+                if let Err(e) = read {
+                    dbg!(e);
 
-                        let size = read.unwrap();
+                    return;
+                }
 
-                        if size == 0 {
-                            return;
-                        }
+                let size = read.unwrap();
+                if size == 0 {
+                    return;
+                }
 
-                        let request = Request::from(&buffer[..size]);
+                let request = Request::from(&buffer[..size]);
 
-                        println!("Received SOCKS4 request: {:?}", request);
+                println!("Received SOCKS4 request: {:?}", request);
 
-                        let ip = request.get_ip();
-                        let port = request.get_port();
-                        let addr: SocketAddr = SocketAddr::new(ip, port);
+                let ip = request.get_addr();
+                let port = request.get_port();
+                let command = request.get_command();
 
-                        match Command::from(request.command) {
-                            Command::Connect => {
-                                println!("Connecting to {}:{}", ip, port);
+                let addr: SocketAddr = SocketAddr::new(ip, port);
 
-                                let mut connection = match TcpStream::connect(addr) {
-                                    Ok(connection) => connection,
-                                    Err(e) => {
-                                        eprintln!("Failed to connect to destination: {:?}", e);
+                match command {
+                    Command::Connect => {
+                        println!("Connecting to {}:{}", ip, port);
 
-                                        return;
-                                    }
-                                };
+                        let mut connection = match TcpStream::connect(addr).await {
+                            Ok(connection) => connection,
+                            Err(e) => {
+                                dbg!(&e);
 
-                                let reply = handler(addr);
-                                let response = Response::new(reply.clone());
+                                let response = Response::new(Reply::RejectOrFailed);
                                 let response_buffer: Vec<u8> = response.into();
 
-                                let wrote = stream.write(&response_buffer);
+                                let wrote = stream.write(&response_buffer).await;
                                 if let Err(e) = wrote {
                                     dbg!(e);
 
                                     return;
                                 }
 
-                                let size = wrote.unwrap();
-                                dbg!(size);
-
-                                if let Reply::Granted = reply {
-                                    println!("Access allowed");
-                                } else {
-                                    eprintln!("Access not allowed");
-
-                                    return;
-                                }
-
-                                let mut s = stream.try_clone().unwrap();
-                                let mut c = connection.try_clone().unwrap();
-                                let _ = thread::spawn(move || {
-                                    let mut buffer: Vec<u8> = vec![0 as u8; 65535];
-
-                                    loop {
-                                        match c.read(&mut buffer) {
-                                            Ok(0) => {
-                                                break;
-                                            }
-                                            Ok(size) => {
-                                                if let Err(e) = s.write_all(&buffer[..size]) {
-                                                    eprintln!("Error writing to stream: {:?}", e);
-
-                                                    break;
-                                                }
-                                            }
-                                            Err(e) => {
-                                                dbg!(e);
-
-                                                break;
-                                            }
-                                        }
-                                    }
-                                });
-
-                                let mut buffer: Vec<u8> = vec![0 as u8; 65535];
-                                loop {
-                                    match stream.read(&mut buffer) {
-                                        Ok(0) => {
-                                            break;
-                                        }
-                                        Ok(size) => {
-                                            if let Err(e) = connection.write_all(&buffer[..size]) {
-                                                eprintln!("Error writing to connection: {:?}", e);
-
-                                                break;
-                                            }
-                                        }
-                                        Err(e) => {
-                                            dbg!(e);
-
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                eprintln!("SOCKS doesn't support this command yet");
+                                println!("failed to connect to ending host");
 
                                 return;
                             }
+                        };
+
+                        let reply = handler(addr);
+
+                        let response = Response::new(reply.clone());
+                        let response_buffer: Vec<u8> = response.into();
+
+                        let wrote = stream.write(&response_buffer).await;
+                        if let Err(e) = wrote {
+                            dbg!(e);
+
+                            return;
                         }
 
-                        println!("SOCKS4 connection closed");
-                    });
-                }
-                Err(e) => {
-                    dbg!(e);
-                }
-            }
-        }
+                        let size = wrote.unwrap();
+                        if size == 0 {
+                            return;
+                        }
 
-        return Ok(());
+                        if let Reply::Granted = reply {
+                            println!("Access allowed");
+                        } else {
+                            eprintln!("Access not allowed");
+
+                            return;
+                        }
+
+                        drop(buffer);
+
+                        let (mut connection_read, mut connection_write) = connection.split();
+                        let (mut stream_read, mut stream_write) = stream.split();
+
+                        let mut buffer_connection = vec![0u8; 65535];
+                        let mut buffer_stream = vec![0u8; 65535];
+
+                        loop {
+                            tokio::select! {
+                                Ok(size) = connection_read.read(&mut buffer_connection) => {
+                                    if size == 0 {
+                                        break;
+                                    }
+                                    if let Err(e) = stream_write.write_all(&buffer_connection[..size]).await {
+                                        eprintln!("Error writing to stream: {:?}", e);
+                                        break;
+                                    }
+                                },
+                                Ok(size) = stream_read.read(&mut buffer_stream) => {
+                                    if size == 0 {
+                                        break;
+                                    }
+                                    if let Err(e) = connection_write.write_all(&buffer_stream[..size]).await {
+                                        eprintln!("Error writing to connection: {:?}", e);
+                                        break;
+                                    }
+                                },
+                            };
+                        }
+                    }
+                    _ => {
+                        todo!();
+                    }
+                }
+            });
+        }
     }
 }

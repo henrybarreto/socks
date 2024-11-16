@@ -11,7 +11,7 @@ pub struct Request {
     pub command: u8,
     /// Reserved.
     pub rsv: u8,
-    /// Destination address with its type. It can be IPv4, IPv6 or a domain name.
+    /// Destination address with its type.
     pub addr: Vec<u8>,
     /// Destination port number.
     pub port: [u8; 2],
@@ -70,12 +70,13 @@ impl Request {
 
 impl From<&[u8]> for Request {
     fn from(buffer: &[u8]) -> Self {
+        let length = buffer.len();
         return Request {
             version: buffer[0],
             command: buffer[1],
             rsv: buffer[2],
-            addr: Vec::from([buffer[3], buffer[4], buffer[5], buffer[6], buffer[7]]),
-            port: [buffer[8], buffer[9]],
+            addr: Vec::from(&buffer[3..(length - 2)]),
+            port: [buffer[length - 2], buffer[length - 1]],
         };
     }
 }
@@ -122,7 +123,7 @@ impl Into<u8> for AuthMethod {
 #[derive(Debug, Clone)]
 pub struct Greeting {
     pub version: u8,
-    pub auth_method: u8,
+    pub number: u8,
     pub auth: Vec<u8>,
 }
 
@@ -130,7 +131,7 @@ impl From<&[u8]> for Greeting {
     fn from(buffer: &[u8]) -> Self {
         return Greeting {
             version: buffer[0],
-            auth_method: buffer[1],
+            number: buffer[1],
             auth: Vec::from(&buffer[2..]),
         };
     }
