@@ -1,5 +1,5 @@
 /*!
-This is a simple SOCKS4 server example using threads.
+This is a simple SOCKS5 server example using threads.
 
 # Usage
 
@@ -8,7 +8,7 @@ This is a simple SOCKS4 server example using threads.
 You can use HTTPie with `--proxy` flag to do an HTTP request through the SOCKS server.
 
 ```bash
-http --proxy=http:socks4://localhost:1080 http://example.com
+http --proxy=http:socks5://localhost:1080 http://example.com
 ```
 
 ## Chromium
@@ -16,7 +16,7 @@ http --proxy=http:socks4://localhost:1080 http://example.com
 You can also test the server through a Chromium based browser.
 
 ```bash
-chromium --proxy-server="socks4://localhost:1080"
+chromium --proxy-server="socks5://localhost:1080"
 ```
 */
 
@@ -26,13 +26,16 @@ use std::{
     thread,
 };
 
-use socks::v4::{
-    client::Request,
-    server::{Reply, Response},
+use socks::{
+    v5::{
+        client::{Greeting, Request},
+        server::Choice,
+    },
+    Version,
 };
 
 fn main() {
-    println!("example of a simple SOCKS4 server");
+    println!("example of a simple SOCKS5 server");
 
     let listener = TcpListener::bind("127.0.0.1:1080").unwrap();
     for tcp_stream in listener.incoming() {
@@ -44,6 +47,18 @@ fn main() {
                     println!("new tcp stream");
 
                     let mut buffer: Vec<u8> = vec![0 as u8; 65535];
+
+                    let read = stream.read(&mut buffer).unwrap();
+                    let greeting = Greeting::from(Vec::from(&buffer[..read]));
+                    dbg!(greeting);
+
+                    let choice = Choice {
+                        version: Version::V5 as u8,
+                        choose: 0,
+                    };
+
+                    let wrotten = stream.write(&[5, 0]).unwrap();
+                    dbg!(choice);
 
                     let read = stream.read(&mut buffer);
                     if let Err(e) = read {
@@ -60,7 +75,7 @@ fn main() {
 
                     let request = Request::from(buffer[..size].to_vec());
 
-                    println!("Received SOCKS4 request: {:?}", request);
+                    println!("Received SOCKS5 request: {:?}", request);
 
                     let ip = request.get_ip();
                     let port = request.get_port();
@@ -77,18 +92,24 @@ fn main() {
                         }
                     };
 
-                    let response = Response::new(Reply::Granted);
-                    let response_buffer: Vec<u8> = response.into();
+                    let response = Vec::from(&[
+                        0x05,
+                        0x00,
+                        0x00,
+                        1,
+                        request.ip[0],
+                        request.ip[1],
+                        request.ip[2],
+                        request.ip[3],
+                        request.port[0],
+                        request.port[1],
+                    ]);
 
-                    let wrote = stream.write(&response_buffer);
-                    if let Err(e) = wrote {
-                        dbg!(e);
+                    if let Err(e) = stream.write(&response) {
+                        eprintln!("Error sending response: {:?}", e);
 
                         return;
                     }
-
-                    let size = wrote.unwrap();
-                    dbg!(size);
 
                     let mut s = stream.try_clone().unwrap();
                     let mut c = connection.try_clone().unwrap();
@@ -137,7 +158,7 @@ fn main() {
                         }
                     }
 
-                    println!("SOCKS4 connection closed");
+                    println!("SOCKS5 connection closed");
                 });
             }
             Err(e) => {

@@ -14,7 +14,7 @@ edition = "2021"
 async = []
 tokio = ["async", "dep:tokio"]
 smol = ["async", "dep:smol"]
-default = []
+default = ["async", "tokio"]
 
 [dependencies]
 tokio = { version = "1", features = [

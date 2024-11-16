@@ -1,30 +1,3 @@
-//! SOCKS reponse packet, and utilities.
-
-/// Peply code.
-///
-/// # Example
-///
-/// ```rust
-/// let reply: u8 = Reply::Granted as u8;
-/// ```
-#[derive(Debug, Clone)]
-pub enum Reply {
-    /// Request granted.
-    Granted = 0x5A,
-    /// Request rejected or failed.
-    RejectOrFailed = 0x5B,
-    /// Request failed because client is not running identd (or not reachable from server).
-    FailedClientNotRunning = 0x5C,
-    /// Request failed because client's identd could not confirm the user ID in the request.
-    FailedClientNotConfirmed = 0x5D,
-}
-
-impl Into<u8> for Reply {
-    fn into(self) -> u8 {
-        return self as u8;
-    }
-}
-
 /// The size of the Response packet sent by SOCKS proxy server.
 pub const SOCKS4_RESPONSE_SIZE: usize = 8;
 
@@ -69,5 +42,30 @@ impl Into<Vec<u8>> for Response {
         // The others fields are ignored due to RFC.
 
         return buffer.to_vec();
+    }
+}
+
+/// Peply code.
+///
+/// # Example
+///
+/// ```rust
+/// let reply: u8 = Reply::Granted as u8;
+/// ```
+#[derive(Debug, Clone)]
+pub enum Reply {
+    /// Request granted.
+    Granted = 0x5A,
+    /// Request rejected or failed.
+    RejectOrFailed = 0x5B,
+    /// Request failed because client is not running identd (or not reachable from server).
+    FailedClientNotRunning = 0x5C,
+    /// Request failed because client's identd could not confirm the user ID in the request.
+    FailedClientNotConfirmed = 0x5D,
+}
+
+impl Into<u8> for Reply {
+    fn into(self) -> u8 {
+        return self as u8;
     }
 }

@@ -26,8 +26,7 @@ use the library effectively in different scenarios.
 SOCKS supports these versions of the protocol.
 
 - [X] SOCKS4
-- [ ] SOCKS4a
-- [ ] SOCKS5
+- [x] SOCKS5
 
 ## License
 
