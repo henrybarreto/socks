@@ -33,7 +33,7 @@ SOCKS supports these features.
     - [x] TCP connection
     - [ ] TCP bind
   - [ ] IPv6
-    - [ ] TCP connection
+    - [x] TCP connection
     - [ ] TCP bind
   - [ ] Domain
     - [ ] TCP connection

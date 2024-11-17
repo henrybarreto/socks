@@ -30,14 +30,16 @@ impl Request {
         let addr = Address::from(self.addr.clone());
         match Kind::from(addr.kind) {
             Kind::Ipv4 => {
+                // TODO: There is a simple of doing this.
                 return IpAddr::from([
                     addr.address[0],
                     addr.address[1],
                     addr.address[2],
                     addr.address[3],
-                ])
+                ]);
             }
             Kind::Ipv6 => {
+                // TODO: There is a simple of doing this.
                 return IpAddr::from([
                     addr.address[0],
                     addr.address[1],
@@ -55,7 +57,7 @@ impl Request {
                     addr.address[13],
                     addr.address[14],
                     addr.address[15],
-                ])
+                ]);
             }
             _ => {
                 todo!();
