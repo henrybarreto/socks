@@ -16,11 +16,16 @@ use ::socks::{
     v5::{server::Choice, Reply},
     Version,
 };
+use log::info;
 use socks::v5::socks;
 
 #[tokio::main]
 async fn main() {
-    println!("example of a simple SOCKS5 server");
+    env_logger::Builder::from_env("LOG")
+        .filter_level(log::LevelFilter::Info)
+        .init();
+
+    info!("example of a simple SOCKS5 server");
 
     let server = socks::Socks::new();
 
@@ -33,7 +38,7 @@ async fn main() {
                     choose: 0,
                 };
             },
-            |_| {
+            |_, _| {
                 return Reply::RequestGranted;
             },
         )

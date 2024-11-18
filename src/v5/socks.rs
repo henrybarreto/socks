@@ -1,5 +1,6 @@
 use std::{io::Error, net::SocketAddr};
 
+use log::{debug, error, info, trace, warn};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream, ToSocketAddrs},
@@ -25,57 +26,62 @@ impl Socks {
         &self,
         addr: impl ToSocketAddrs,
         auth: fn(greeting: Greeting) -> Choice,
-        handler: fn(addr: SocketAddr) -> Reply,
+        handler: fn(connection: &mut TcpStream, addr: SocketAddr) -> Reply,
     ) -> Result<(), Error> {
         let listener = TcpListener::bind(addr).await?;
 
         loop {
             let (mut stream, _) = listener.accept().await?;
-            println!("New TCP stream accepted");
+            info!("new stream accepted from: {}", &stream.peer_addr().unwrap());
 
             tokio::spawn(async move {
-                println!("new tcp stream");
+                trace!("new tcp stream");
 
                 let mut buffer: Vec<u8> = vec![0 as u8; 65535];
 
                 let read = stream.read(&mut buffer).await;
                 if let Err(e) = read {
-                    dbg!(e);
+                    error!("error on greating read from stream: {:?}", e);
 
                     return;
                 }
 
                 let size = read.unwrap();
                 if size == 0 {
+                    error!("nothing was read from on greeting request");
+
                     return;
                 }
 
                 let greeting = Greeting::from(&buffer[..size]);
-                dbg!(&greeting);
 
                 let choice = auth(greeting);
                 let choice_buffer: [u8; 2] = choice.into();
-                dbg!(&choice_buffer);
 
-                let written = stream.write(&choice_buffer).await.unwrap();
-                dbg!(written);
+                let written = stream.write(&choice_buffer).await;
+                if let Err(e) = written {
+                    error!("error on choice written to stream: {:?}", e);
+
+                    return;
+                }
 
                 let read = stream.read(&mut buffer).await;
                 if let Err(e) = read {
-                    dbg!(e);
+                    error!("error on read the request from stream: {:?}", e);
 
                     return;
                 }
 
                 let size = read.unwrap();
                 if size == 0 {
+                    error!("nothing was read from request");
+
                     return;
                 }
 
                 let request = Request::from(&buffer[..size]);
-                dbg!(&request);
 
-                println!("Received SOCKS5 request: {:?}", request);
+                debug!("received SOCKS5 request: {:?}", request);
 
                 let ip = request.get_addr();
                 let port = request.get_port();
@@ -85,7 +91,7 @@ impl Socks {
 
                 match command {
                     Command::Connect => {
-                        println!("Connecting to {}:{}", ip, port);
+                        info!("trying to connect to {}:{}", ip, port);
 
                         let mut connection = match TcpStream::connect(addr).await {
                             Ok(connection) => connection,
@@ -99,20 +105,22 @@ impl Socks {
                                 );
                                 let response_buffer: Vec<u8> = response.into();
 
-                                let wrote = stream.write(&response_buffer).await;
-                                if let Err(e) = wrote {
-                                    dbg!(e);
+                                let written = stream.write(&response_buffer).await;
+                                if let Err(e) = written {
+                                    error!("error on response written to stream: {:?}", e);
 
                                     return;
                                 }
 
-                                println!("failed to connect to ending host");
+                                trace!("failed to connect to ending host");
 
                                 return;
                             }
                         };
 
-                        let reply = handler(addr);
+                        info!("connected to {}", &connection.peer_addr().unwrap());
+
+                        let reply = handler(&mut connection, addr);
 
                         let response = server::Response::new(
                             reply.clone(),
@@ -123,20 +131,22 @@ impl Socks {
 
                         let wrote = stream.write(&response_buffer).await;
                         if let Err(e) = wrote {
-                            dbg!(e);
+                            error!("error on response written to stream: {:?}", e);
 
                             return;
                         }
 
                         let size = wrote.unwrap();
                         if size == 0 {
+                            error!("nothing was written to response");
+
                             return;
                         }
 
                         if let Reply::RequestGranted = reply {
-                            println!("Access allowed");
+                            info!("access allowed");
                         } else {
-                            eprintln!("Access not allowed");
+                            warn!("access not allowed due {:?}", reply);
 
                             return;
                         }
@@ -155,8 +165,9 @@ impl Socks {
                                     if size == 0 {
                                         break;
                                     }
-                                    if let Err(e) = stream_write.write_all(&buffer_connection[..size]).await {
-                                        eprintln!("Error writing to stream: {:?}", e);
+                                    if let Err(e) = stream_write.write(&buffer_connection[..size]).await {
+                                        error!("error writing to stream on loop: {:?}", e);
+
                                         break;
                                     }
                                 },
@@ -164,13 +175,25 @@ impl Socks {
                                     if size == 0 {
                                         break;
                                     }
-                                    if let Err(e) = connection_write.write_all(&buffer_stream[..size]).await {
-                                        eprintln!("Error writing to connection: {:?}", e);
+                                    if let Err(e) = connection_write.write(&buffer_stream[..size]).await {
+                                        error!("error writing to connection on loop: {:?}", e);
+
                                         break;
                                     }
                                 },
+                                else => {
+                                    warn!("something was wrong on reading and writing process");
+
+                                    break;
+                                },
                             };
                         }
+
+                        info!(
+                            "stream from {} to {} done",
+                            &stream.peer_addr().unwrap(),
+                            &connection.peer_addr().unwrap(),
+                        );
                     }
                     _ => {
                         todo!();
