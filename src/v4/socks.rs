@@ -3,6 +3,7 @@ use std::{io::Error, net::SocketAddr};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream, ToSocketAddrs},
+    select, task,
 };
 
 use crate::{
@@ -30,7 +31,7 @@ impl Socks {
             let (mut stream, _) = listener.accept().await?;
             println!("New TCP stream accepted");
 
-            tokio::spawn(async move {
+            task::spawn(async move {
                 println!("new tcp stream");
 
                 let mut buffer: Vec<u8> = vec![0 as u8; 65535];
@@ -116,7 +117,7 @@ impl Socks {
                         let mut buffer_stream = vec![0u8; 65535];
 
                         loop {
-                            tokio::select! {
+                            select! {
                                 Ok(size) = connection_read.read(&mut buffer_connection) => {
                                     if size == 0 {
                                         break;
