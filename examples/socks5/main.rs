@@ -13,11 +13,15 @@ http --proxy=http:socks5://localhost:1080 http://example.com
 */
 
 use ::socks::{
-    v5::{server::Choice, Reply},
+    v5::{
+        server::{Choice, Response},
+        Reply,
+    },
     Version,
 };
-use log::info;
+use log::{error, info, warn};
 use socks::v5::socks;
+use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() {
@@ -38,8 +42,31 @@ async fn main() {
                     choose: 0,
                 };
             },
-            |_, _| {
-                return Reply::RequestGranted;
+            |mut stream, request| async move {
+                let reply = Reply::RequestGranted;
+
+                let response = Response::new(reply.clone(), request.addr.to_vec(), request.port);
+                let response_buffer: Vec<u8> = response.into();
+
+                let wrote = stream.write(&response_buffer).await;
+                if let Err(e) = wrote {
+                    error!("error on response written to stream: {:?}", e);
+
+                    return Err(e);
+                }
+
+                let size = wrote.unwrap();
+                if size == 0 {
+                    error!("nothing was written to response");
+                }
+
+                if let Reply::RequestGranted = reply {
+                    info!("access allowed");
+                } else {
+                    warn!("access not allowed due {:?}", reply);
+                }
+
+                return Ok(stream);
             },
         )
         .await

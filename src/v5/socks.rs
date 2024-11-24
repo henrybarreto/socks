@@ -1,4 +1,4 @@
-use std::{io::Error, net::SocketAddr};
+use std::{future::Future, io::Error, net::SocketAddr};
 
 use log::{debug, error, info, trace, warn};
 use tokio::{
@@ -23,12 +23,16 @@ impl Socks {
         return Socks;
     }
 
-    pub async fn listen(
+    pub async fn listen<F, Fut>(
         &self,
         addr: impl ToSocketAddrs,
         auth: fn(greeting: Greeting) -> Choice,
-        handler: fn(connection: &mut TcpStream, addr: SocketAddr) -> Reply,
-    ) -> Result<(), Error> {
+        handler: F,
+    ) -> Result<(), Error>
+    where
+        F: Fn(TcpStream, Request) -> Fut + Send + Copy + 'static,
+        Fut: Future<Output = Result<TcpStream, Error>> + Send + 'static,
+    {
         let listener = TcpListener::bind(addr).await?;
 
         loop {
@@ -81,6 +85,7 @@ impl Socks {
                 }
 
                 let request = Request::from(&buffer[..size]);
+                drop(buffer);
 
                 debug!("received SOCKS5 request: {:?}", request);
 
@@ -119,40 +124,7 @@ impl Socks {
                             }
                         };
 
-                        info!("connected to {}", &connection.peer_addr().unwrap());
-
-                        let reply = handler(&mut connection, addr);
-
-                        let response = server::Response::new(
-                            reply.clone(),
-                            request.addr.to_vec(),
-                            request.port,
-                        );
-                        let response_buffer: Vec<u8> = response.into();
-
-                        let wrote = stream.write(&response_buffer).await;
-                        if let Err(e) = wrote {
-                            error!("error on response written to stream: {:?}", e);
-
-                            return;
-                        }
-
-                        let size = wrote.unwrap();
-                        if size == 0 {
-                            error!("nothing was written to response");
-
-                            return;
-                        }
-
-                        if let Reply::RequestGranted = reply {
-                            info!("access allowed");
-                        } else {
-                            warn!("access not allowed due {:?}", reply);
-
-                            return;
-                        }
-
-                        drop(buffer);
+                        let mut stream = handler(stream, request).await.unwrap();
 
                         let (mut connection_read, mut connection_write) = connection.split();
                         let (mut stream_read, mut stream_write) = stream.split();

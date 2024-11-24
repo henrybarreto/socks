@@ -1,4 +1,4 @@
-use std::{io::Error, net::SocketAddr};
+use std::{future::Future, io::Error, net::SocketAddr};
 
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -20,11 +20,11 @@ impl Socks {
         return Socks;
     }
 
-    pub async fn listen(
-        &self,
-        addr: impl ToSocketAddrs,
-        handler: fn(addr: SocketAddr) -> Reply,
-    ) -> Result<(), Error> {
+    pub async fn listen<F, Fut>(&self, addr: impl ToSocketAddrs, handler: F) -> Result<(), Error>
+    where
+        F: Fn(TcpStream, Request) -> Fut + Send + Copy + 'static,
+        Fut: Future<Output = Result<TcpStream, Error>> + Send + 'static,
+    {
         let listener = TcpListener::bind(addr).await?;
 
         loop {
@@ -49,6 +49,7 @@ impl Socks {
                 }
 
                 let request = Request::from(&buffer[..size]);
+                drop(buffer);
 
                 println!("Received SOCKS4 request: {:?}", request);
 
@@ -83,32 +84,7 @@ impl Socks {
                             }
                         };
 
-                        let reply = handler(addr);
-
-                        let response = Response::new(reply.clone());
-                        let response_buffer: Vec<u8> = response.into();
-
-                        let wrote = stream.write(&response_buffer).await;
-                        if let Err(e) = wrote {
-                            dbg!(e);
-
-                            return;
-                        }
-
-                        let size = wrote.unwrap();
-                        if size == 0 {
-                            return;
-                        }
-
-                        if let Reply::Granted = reply {
-                            println!("Access allowed");
-                        } else {
-                            eprintln!("Access not allowed");
-
-                            return;
-                        }
-
-                        drop(buffer);
+                        let mut stream = handler(stream, request).await.unwrap();
 
                         let (mut connection_read, mut connection_write) = connection.split();
                         let (mut stream_read, mut stream_write) = stream.split();
