@@ -10,7 +10,7 @@ use tokio::{
 use crate::{
     v5::{
         client::{Greeting, Request},
-        server::{self, Choice},
+        server::{self},
         Reply,
     },
     Command,
@@ -23,15 +23,17 @@ impl Socks {
         return Socks;
     }
 
-    pub async fn listen<F, Fut>(
+    pub async fn listen<A, H, FutA, FutH>(
         &self,
         addr: impl ToSocketAddrs,
-        auth: fn(greeting: Greeting) -> Choice,
-        handler: F,
+        auth: A,
+        handler: H,
     ) -> Result<(), Error>
     where
-        F: Fn(TcpStream, Request) -> Fut + Send + Copy + 'static,
-        Fut: Future<Output = Result<TcpStream, Error>> + Send + 'static,
+        A: Fn(TcpStream, Greeting) -> FutA + Send + Copy + 'static,
+        H: Fn(TcpStream, Request) -> FutH + Send + Copy + 'static,
+        FutA: Future<Output = Result<TcpStream, Error>> + Send + 'static,
+        FutH: Future<Output = Result<TcpStream, Error>> + Send + 'static,
     {
         let listener = TcpListener::bind(addr).await?;
 
@@ -60,15 +62,14 @@ impl Socks {
 
                 let greeting = Greeting::from(&buffer[..size]);
 
-                let choice = auth(greeting);
-                let choice_buffer: [u8; 2] = choice.into();
+                let mut stream = match auth(stream, greeting).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!("failed to authenticate: {}", e);
 
-                let written = stream.write(&choice_buffer).await;
-                if let Err(e) = written {
-                    error!("error on choice written to stream: {:?}", e);
-
-                    return;
-                }
+                        return;
+                    }
+                };
 
                 let read = stream.read(&mut buffer).await;
                 if let Err(e) = read {

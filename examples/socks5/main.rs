@@ -12,12 +12,9 @@ http --proxy=http:socks5://localhost:1080 http://example.com
 ```
 */
 
-use ::socks::{
-    v5::{
-        server::{Choice, Response},
-        Reply,
-    },
-    Version,
+use ::socks::v5::{
+    server::{Choice, Response},
+    Reply,
 };
 use log::{error, info, warn};
 use socks::v5::socks;
@@ -36,11 +33,22 @@ async fn main() {
     server
         .listen(
             "127.0.0.1:1080",
-            |_| {
-                return Choice {
-                    version: Version::V5 as u8,
+            |mut stream, _| async move {
+                let choice = Choice {
+                    version: 0x05,
                     choose: 0,
                 };
+
+                let choice_buffer: [u8; 2] = choice.into();
+
+                let written = stream.write(&choice_buffer).await;
+                if let Err(e) = written {
+                    error!("error on choice written to stream: {:?}", e);
+
+                    return Err(e);
+                }
+
+                return Ok(stream);
             },
             |mut stream, request| async move {
                 let reply = Reply::RequestGranted;
