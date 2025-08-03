@@ -7,7 +7,7 @@ repository = "https://github.com/henrybarreto/socks"
 license = "MIT"
 license-file = "LICENSE"
 readme = "README.md"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 
 [dependencies]
